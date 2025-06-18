@@ -5,8 +5,6 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.support.ui import Select
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 import random
@@ -20,6 +18,7 @@ class TestAutomationExercise:
         chrome_options = Options()
         chrome_options.add_argument("--start-maximized")
         chrome_options.add_argument("--disable-notifications")
+        chrome_options.add_argument("--headless")  # Uncomment to run in headless mode
         chrome_options.add_experimental_option("prefs", { "profile.default_content_setting_values.geolocation": 2})
         ##chrome_options.add_experimental_option('excludeSwitches', ['disable-popup-blocking'])
         
@@ -28,7 +27,6 @@ class TestAutomationExercise:
         self.base_url = "http://automationexercise.com"
         self.DOWNLOAD_DIR = "D:\\_Downloads"
         yield
-        
         # Teardown
         self.driver.quit()
 
@@ -65,7 +63,7 @@ class TestAutomationExercise:
         name_field = self.driver.find_element(By.XPATH, '//*[@id="form"]/div/div/div[3]/div/form/input[2]')
         email_field = self.driver.find_element(By.XPATH, "//input[@data-qa='signup-email']")
         
-        name_field.clear
+        name_field.clear()
         name_field.send_keys(username)
         email_field.send_keys(email)
         
@@ -207,13 +205,16 @@ class TestAutomationExercise:
         # Click login button
         login_btn = self.driver.find_element(By.XPATH, "//button[@data-qa='login-button']")
         login_btn.click()
-        
+        assert "Automation Exercise" in self.driver.title
+
         # This test would need valid credentials to complete successfully
-        logout_btn = self.driver.find_element(By.XPATH, "//*[@id='header']/div/div/div/div[2]/div/ul/li[4]/a")
+        logout_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Logout")))
         logout_btn.click()
 
+        assert "login" in self.driver.current_url
+
     def test_case_5_Register_User_with_existing_email(self):
-        """Test Cade 5: Register User with existing email"""
+        """Test Case 5: Register User with existing email"""
         self.driver.get(self.base_url)
 
         # Click on 'Signup / Login' button
@@ -275,8 +276,8 @@ class TestAutomationExercise:
         try:
             alert = self.driver.switch_to.alert
             alert.accept()
-        except:self
-        pass
+        except Exception:
+            pass
         
         # Verify success message
         success_message = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//div[contains(text(), 'Success! Your details have been submitted successfully.')]")))
@@ -654,12 +655,14 @@ class TestAutomationExercise:
         signup_button = self.driver.find_element(By.XPATH, "//button[@data-qa='signup-button']")
         signup_button.click()
 
-        self.driver.execute_script("window.scrollBy(0,400);")
+        
         
         # Fill account info
         WebDriverWait(self.driver, 30).until(
             EC.visibility_of_element_located((By.XPATH, "//b[text()='Enter Account Information']"))
         )
+
+        self.driver.execute_script("window.scrollBy(0,400);")
         self.driver.find_element(By.ID, "id_gender1").click()
         self.driver.find_element(By.ID, "password").send_keys("TestPassword123")
         self.driver.find_element(By.ID, "days").send_keys("1")
@@ -848,23 +851,26 @@ class TestAutomationExercise:
     def test_case_18_view_category_products(self):
         """Test Case 18: View Category Products"""
         self.driver.get(self.base_url)
-
+        
         # Step 2: Verify homepage is visible
         assert "Automation Exercise" in self.driver.title
 
         # Step 3: Verify 'CATEGORY' section is visible in sidebar
+        self.driver.get("https://automationexercise.com/products")
+        
         category_header = WebDriverWait(self.driver, 10).until(
             EC.visibility_of_element_located((By.XPATH, "//h2[text()='Category']"))
         )
         assert category_header.is_displayed()
+        self.driver.execute_script("window.scrollBy(0,600);")
 
         # Step 4: Click on 'Women' category
-        women_category = self.driver.find_element(By.XPATH, "//a[@href='#Women']")
+        women_category = self.driver.find_element(By.XPATH, '//*[@id="accordian"]/div[1]/div[1]/h4/a')
         women_category.click()
 
         # Step 5: Click on 'Dress' sub-category under 'Women'
         dress_subcategory = WebDriverWait(self.driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, "//div[@id='Women']//a[text()='Dress ']"))
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="Women"]/div/ul/li[1]/a'))
         )
         dress_subcategory.click()
 
