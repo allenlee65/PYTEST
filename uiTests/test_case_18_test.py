@@ -33,6 +33,9 @@ class Testcase18:
         # Step 2: Verify homepage is visible
         assert "Automation Exercise" in self.driver.title
 
+        self.driver.get("https://automationexercise.com/products")
+        self.driver.execute_script("window.scrollBy(0,600);")
+
         # Step 3: Verify 'CATEGORY' section is visible in sidebar
         category_header = WebDriverWait(self.driver, 10).until(
             EC.visibility_of_element_located((By.XPATH, "//h2[text()='Category']"))
@@ -45,7 +48,7 @@ class Testcase18:
 
         # Step 5: Click on 'Dress' sub-category under 'Women'
         dress_subcategory = WebDriverWait(self.driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, "//div[@id='Women']//a[text()='Dress ']"))
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="Women"]/div/ul/li[1]/a'))
         )
         dress_subcategory.click()
 

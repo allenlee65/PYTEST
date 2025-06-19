@@ -26,14 +26,12 @@ class Testcase17:
         self.driver.quit()
 
 
-
     def test_case_17_Remove_Products_From_Cart(self):
         
         self.driver.get("https://automationexercise.com/products")
 
         self.driver.execute_script("window.scrollBy(0,600);")
         
-
         # Step 4: Click "Add to cart"
         first_add_to_cart = WebDriverWait(self.driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "(//a[contains(text(),'Add to cart')])[1]"))
