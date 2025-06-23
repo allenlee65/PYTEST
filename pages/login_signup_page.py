@@ -5,14 +5,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 
 
-class LoginPage(BasePage):
+class LoginSignupPage(BasePage):
     def login(self):
-        self.driver.get(self.base_url)
-        assert "Automation Exercise" in self.driver.title
         
-        # Click on 'Signup / Login' button
-        signup_login_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Signup / Login")))
-        signup_login_btn.click()
         
         # Verify 'Login to your account' is visible
         login_text = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h2[contains(text(), 'Login to your account')]")))
