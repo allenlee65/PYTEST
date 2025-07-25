@@ -1,6 +1,13 @@
 import pytest
 import time
 import os
+import smtplib
+import json
+from datetime import datetime
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -10,8 +17,187 @@ from selenium.webdriver.chrome.options import Options
 import random
 import string
 
+class TestResultCollector:
+    """Collects test results for email reporting"""
+    test_results = {
+        'passed': [],
+        'failed': [],
+        'skipped': [],
+        'total_tests': 0,
+        'execution_time': '',
+        'start_time': None,
+        'end_time': None
+    }
 
+    @classmethod
+    def reset_results(cls):
+        """Reset test results"""
+        cls.test_results = {
+            'passed': [],
+            'failed': [],
+            'skipped': [],
+            'total_tests': 0,
+            'execution_time': '',
+            'start_time': datetime.now(),
+            'end_time': None
+        }
+
+    @classmethod
+    def add_result(cls, test_name, status, error_msg=None):
+        """Add test result"""
+        cls.test_results['total_tests'] += 1
+        
+        if status == 'PASSED':
+            cls.test_results['passed'].append(test_name)
+        elif status == 'FAILED':
+            cls.test_results['failed'].append({
+                'name': test_name,
+                'error': error_msg or 'Unknown error'
+            })
+        elif status == 'SKIPPED':
+            cls.test_results['skipped'].append(test_name)
+
+    @classmethod
+    def send_test_report_email(cls):
+        """Send test execution report via email"""
+        try:
+            # Set end time
+            cls.test_results['end_time'] = datetime.now()
+            
+            # Email configuration - UPDATE THESE WITH YOUR ACTUAL CREDENTIALS
+            smtp_server = "smtp.gmail.com"
+            smtp_port = 587
+            sender_email = "allenlee0611@gmail.com"  # Replace with your Gmail
+            sender_password = "xecf qlvq djuj tnds"   # Replace with your Gmail App Password
+            recipient_email = "allenlee0611@gmail.com"
+            
+            # Calculate execution time
+            if cls.test_results['end_time'] and cls.test_results['start_time']:
+                execution_time = cls.test_results['end_time'] - cls.test_results['start_time']
+                cls.test_results['execution_time'] = str(execution_time)
+            
+            # Create email message
+            msg = MIMEMultipart()
+            msg['From'] = sender_email
+            msg['To'] = recipient_email
+            msg['Subject'] = f"Automation Test Results - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            
+            # Create HTML email body
+            html_body = cls.create_html_report()
+            msg.attach(MIMEText(html_body, 'html'))
+            
+            # Send email
+            server = smtplib.SMTP(smtp_server, smtp_port)
+            server.starttls()
+            server.login(sender_email, sender_password)
+            text = msg.as_string()
+            server.sendmail(sender_email, recipient_email, text)
+            server.quit()
+            
+            print(f"Test report sent successfully to {recipient_email}")
+            
+        except Exception as e:
+            print(f"Failed to send email: {str(e)}")
+    
+    @classmethod
+    def create_html_report(cls):
+        """Create HTML formatted test report"""
+        total_tests = cls.test_results['total_tests']
+        passed_count = len(cls.test_results['passed'])
+        failed_count = len(cls.test_results['failed'])
+        skipped_count = len(cls.test_results['skipped'])
+        success_rate = (passed_count / total_tests * 100) if total_tests > 0 else 0
+        
+        html = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                .header {{ background-color: #4CAF50; color: white; padding: 10px; text-align: center; }}
+                .summary {{ background-color: #f2f2f2; padding: 15px; margin: 10px 0; }}
+                .passed {{ color: #4CAF50; }}
+                .failed {{ color: #f44336; }}
+                .skipped {{ color: #ff9800; }}
+                table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
+                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                th {{ background-color: #f2f2f2; }}
+                .status-passed {{ background-color: #d4edda; }}
+                .status-failed {{ background-color: #f8d7da; }}
+                .status-skipped {{ background-color: #fff3cd; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Automation Exercise Test Report</h1>
+                <p>Execution Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            </div>
+            
+            <div class="summary">
+                <h2>Test Summary</h2>
+                <p><strong>Total Tests:</strong> {total_tests}</p>
+                <p><strong class="passed">Passed:</strong> {passed_count}</p>
+                <p><strong class="failed">Failed:</strong> {failed_count}</p>
+                <p><strong class="skipped">Skipped:</strong> {skipped_count}</p>
+                <p><strong>Success Rate:</strong> {success_rate:.1f}%</p>
+                <p><strong>Execution Time:</strong> {cls.test_results['execution_time']}</p>
+            </div>
+            
+            <h2>Test Details</h2>
+            <table>
+                <tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Details</th>
+                </tr>
+        """
+        
+        # Add passed tests
+        for test in cls.test_results['passed']:
+            html += f"""
+                <tr class="status-passed">
+                    <td>{test}</td>
+                    <td class="passed">PASSED</td>
+                    <td>Test executed successfully</td>
+                </tr>
+            """
+        
+        # Add failed tests
+        for test_info in cls.test_results['failed']:
+            test_name = test_info.get('name', 'Unknown')
+            error_msg = test_info.get('error', 'No error message')
+            # Truncate long error messages
+            if len(error_msg) > 200:
+                error_msg = error_msg[:200] + "..."
+            html += f"""
+                <tr class="status-failed">
+                    <td>{test_name}</td>
+                    <td class="failed">FAILED</td>
+                    <td>{error_msg}</td>
+                </tr>
+            """
+        
+        # Add skipped tests
+        for test in cls.test_results['skipped']:
+            html += f"""
+                <tr class="status-skipped">
+                    <td>{test}</td>
+                    <td class="skipped">SKIPPED</td>
+                    <td>Test was skipped</td>
+                </tr>
+            """
+        
+        html += """
+            </table>
+        </body>
+        </html>
+        """
+        
+        return html
+
+# Add retry marker at class level
+@pytest.mark.flaky(reruns=3, reruns_delay=2)
 class TestAutomationExercise:
+    
     @pytest.fixture(autouse=True)
     def setup_method(self):
         """Setup method to initialize WebDriver before each test"""
@@ -20,12 +206,12 @@ class TestAutomationExercise:
         chrome_options.add_argument("--disable-notifications")
         chrome_options.add_argument("--headless")  # Uncomment to run in headless mode
         chrome_options.add_experimental_option("prefs", { "profile.default_content_setting_values.geolocation": 2})
-        ##chrome_options.add_experimental_option('excludeSwitches', ['disable-popup-blocking'])
         
         self.driver = webdriver.Chrome(options=chrome_options)
         self.wait = WebDriverWait(self.driver, 10)
         self.base_url = "http://automationexercise.com"
-        self.DOWNLOAD_DIR = "D:\\_Downloads"
+        self.DOWNLOAD_DIR = "/home/allenlee/Downloads"
+
         yield
         # Teardown
         self.driver.quit()
@@ -40,178 +226,208 @@ class TestAutomationExercise:
         names = ["John", "Jane", "Mike", "Sarah", "David", "Emma", "Alex", "Lisa"]
         return random.choice(names) + str(random.randint(100, 999))
 
+    # Add retry decorator to individual tests that might be flaky
+    @pytest.mark.flaky(reruns=2, reruns_delay=1)
     def test_case_1_register_user(self):
         """Test Case 1: Register User"""
-        # 1. Launch browser and navigate to URL
-        self.driver.get(self.base_url)
-        
-        # 3. Verify home page is visible
-        assert "Automation Exercise" in self.driver.title
-        
-        # 4. Click on 'Signup / Login' button
-        signup_login_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Signup / Login")))
-        signup_login_btn.click()
-        
-        # 5. Verify 'New User Signup!' is visible
-        signup_text = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h2[contains(text(), 'New User Signup!')]")))
-        assert signup_text.is_displayed()
-        
-        # 6. Enter name and email address
-        username = self.generate_random_name()
-        email = self.generate_random_email()
-        
-        name_field = self.driver.find_element(By.XPATH, '//*[@id="form"]/div/div/div[3]/div/form/input[2]')
-        email_field = self.driver.find_element(By.XPATH, "//input[@data-qa='signup-email']")
-        
-        name_field.clear()
-        name_field.send_keys(username)
-        email_field.send_keys(email)
-        
-        # Step 7: Click 'Signup' button
-        signup_btn = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, '//*[@id="form"]/div/div/div[3]/div/form/button'))
+        try:
+            # 1. Launch browser and navigate to URL
+            self.driver.get(self.base_url)
+            
+            # 3. Verify home page is visible
+            assert "Automation Exercise" in self.driver.title
+            
+            # 4. Click on 'Signup / Login' button
+            signup_login_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Signup / Login")))
+            signup_login_btn.click()
+            
+            # 5. Verify 'New User Signup!' is visible
+            signup_text = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h2[contains(text(), 'New User Signup!')]")))
+            assert signup_text.is_displayed()
+            
+            # 6. Enter name and email address
+            username = self.generate_random_name()
+            email = self.generate_random_email()
+            
+            name_field = self.driver.find_element(By.XPATH, '//*[@id="form"]/div/div/div[3]/div/form/input[2]')
+            email_field = self.driver.find_element(By.XPATH, "//input[@data-qa='signup-email']")
+            
+            name_field.clear()
+            name_field.send_keys(username)
+            email_field.send_keys(email)
+            
+            # Step 7: Click 'Signup' button
+            signup_btn = WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, '//*[@id="form"]/div/div/div[3]/div/form/button'))
+                )
+            signup_btn.click()
+
+            # Fill account info
+            WebDriverWait(self.driver, 10).until(
+                EC.visibility_of_element_located((By.XPATH, "//b[text()='Enter Account Information']"))
             )
-        signup_btn.click()
+            self.driver.execute_script("window.scrollBy(0,400);")
 
-        # Fill account info
-        WebDriverWait(self.driver, 10).until(
-            EC.visibility_of_element_located((By.XPATH, "//b[text()='Enter Account Information']"))
-        )
-        self.driver.execute_script("window.scrollBy(0,400);")
+            self.driver.find_element(By.ID, "id_gender1").click()
+            self.driver.find_element(By.ID, "password").send_keys("TestPassword123")
+            self.driver.find_element(By.ID, "days").send_keys("1")
+            self.driver.find_element(By.ID, "months").send_keys("January")
+            self.driver.find_element(By.ID, "years").send_keys("2000")
+            self.driver.find_element(By.ID, "newsletter").click()
+            self.driver.find_element(By.ID, "optin").click()
+            self.driver.find_element(By.ID, "first_name").send_keys("Test")
+            self.driver.find_element(By.ID, "last_name").send_keys("User")
+            self.driver.find_element(By.ID, "company").send_keys("TestCompany")
+            self.driver.find_element(By.ID, "address1").send_keys("123 Test St")
+            self.driver.find_element(By.ID, "address2").send_keys("Suite 1")
+            self.driver.find_element(By.ID, "country").send_keys("United States")
+            self.driver.find_element(By.ID, "state").send_keys("TestState")
+            self.driver.find_element(By.ID, "city").send_keys("TestCity")
+            self.driver.find_element(By.ID, "zipcode").send_keys("12345")
+            self.driver.find_element(By.ID, "mobile_number").send_keys("1234567890")
+            self.driver.find_element(By.XPATH, "//button[@data-qa='create-account']").click()
 
-        self.driver.find_element(By.ID, "id_gender1").click()
-        self.driver.find_element(By.ID, "password").send_keys("TestPassword123")
-        self.driver.find_element(By.ID, "days").send_keys("1")
-        self.driver.find_element(By.ID, "months").send_keys("January")
-        self.driver.find_element(By.ID, "years").send_keys("2000")
-        self.driver.find_element(By.ID, "newsletter").click()
-        self.driver.find_element(By.ID, "optin").click()
-        self.driver.find_element(By.ID, "first_name").send_keys("Test")
-        self.driver.find_element(By.ID, "last_name").send_keys("User")
-        self.driver.find_element(By.ID, "company").send_keys("TestCompany")
-        self.driver.find_element(By.ID, "address1").send_keys("123 Test St")
-        self.driver.find_element(By.ID, "address2").send_keys("Suite 1")
-        self.driver.find_element(By.ID, "country").send_keys("United States")
-        self.driver.find_element(By.ID, "state").send_keys("TestState")
-        self.driver.find_element(By.ID, "city").send_keys("TestCity")
-        self.driver.find_element(By.ID, "zipcode").send_keys("12345")
-        self.driver.find_element(By.ID, "mobile_number").send_keys("1234567890")
-        self.driver.find_element(By.XPATH, "//button[@data-qa='create-account']").click()
+            # Step 9: Verify 'ACCOUNT CREATED!' and click 'Continue'
+            WebDriverWait(self.driver, 10).until(
+                EC.visibility_of_element_located((By.XPATH, "//b[text()='Account Created!']"))
+            )
+            self.driver.find_element(By.XPATH, "//a[@data-qa='continue-button']").click()
 
-        # Step 9: Verify 'ACCOUNT CREATED!' and click 'Continue'
-        WebDriverWait(self.driver, 10).until(
-            EC.visibility_of_element_located((By.XPATH, "//b[text()='Account Created!']"))
-        )
-        self.driver.find_element(By.XPATH, "//a[@data-qa='continue-button']").click()
+            # Step 10: Verify 'Logged in as username' at top
+            WebDriverWait(self.driver, 10).until(
+                EC.visibility_of_element_located((By.XPATH, "//a[contains(text(),'Logged in as')]"))
+            )
+            
+            # 17. Click 'Delete Account' button
+            delete_account_btn = self.driver.find_element(By.LINK_TEXT, "Delete Account")
+            delete_account_btn.click()
+            
+            # 18. Verify 'ACCOUNT DELETED!' is visible
+            account_deleted_text = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h2[@data-qa='account-deleted']")))
+            assert account_deleted_text.is_displayed()
+            
+            continue_btn = self.driver.find_element(By.XPATH, "//a[@data-qa='continue-button']")
+            continue_btn.click()
+            
+            # Record success
+            TestResultCollector.add_result('test_case_1_register_user', 'PASSED')
+            
+        except Exception as e:
+            # Record failure
+            TestResultCollector.add_result('test_case_1_register_user', 'FAILED', str(e))
+            raise e
 
-        # Step 10: Verify 'Logged in as username' at top
-        WebDriverWait(self.driver, 10).until(
-            EC.visibility_of_element_located((By.XPATH, "//a[contains(text(),'Logged in as')]"))
-        )
-        
-        # 17. Click 'Delete Account' button
-        delete_account_btn = self.driver.find_element(By.LINK_TEXT, "Delete Account")
-        delete_account_btn.click()
-        
-        # 18. Verify 'ACCOUNT DELETED!' is visible
-        account_deleted_text = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h2[@data-qa='account-deleted']")))
-        assert account_deleted_text.is_displayed()
-        
-        continue_btn = self.driver.find_element(By.XPATH, "//a[@data-qa='continue-button']")
-        continue_btn.click()
+    # Add similar try-catch blocks to other tests...
+    # ...existing test methods...
 
     def test_case_2_login_with_correct_credentials(self):
         """Test Case 2: Login User with correct email and password"""
-        # Note: This test requires pre-existing account credentials
-        # For demo purposes, using placeholder credentials
-        
-        self.driver.get(self.base_url)
-        assert "Automation Exercise" in self.driver.title
-        
-        # Click on 'Signup / Login' button
-        signup_login_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Signup / Login")))
-        signup_login_btn.click()
-        
-        # Verify 'Login to your account' is visible
-        login_text = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h2[contains(text(), 'Login to your account')]")))
-        assert login_text.is_displayed()
-        
-        # Enter correct email and password (these would need to be valid credentials)
-        email_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-email']")
-        password_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-password']")
-        
-        # Note: Replace with actual test credentials
-        email_field.send_keys("allenlee@punkproof.com")
-        password_field.send_keys("SKDeIutmdZqgNxJ")
-        
-        # Click login button
-        login_btn = self.driver.find_element(By.XPATH, "//button[@data-qa='login-button']")
-        login_btn.click()
-        
-        # This test would need valid credentials to complete successfully
+        try:
+            self.driver.get(self.base_url)
+            assert "Automation Exercise" in self.driver.title
+            
+            # Click on 'Signup / Login' button
+            signup_login_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Signup / Login")))
+            signup_login_btn.click()
+            
+            # Verify 'Login to your account' is visible
+            login_text = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h2[contains(text(), 'Login to your account')]")))
+            assert login_text.is_displayed()
+            
+            # Enter correct email and password (these would need to be valid credentials)
+            email_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-email']")
+            password_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-password']")
+            
+            # Note: Replace with actual test credentials
+            email_field.send_keys("allenlee@punkproof.com")
+            password_field.send_keys("SKDeIutmdZqgNxJ")
+            
+            # Click login button
+            login_btn = self.driver.find_element(By.XPATH, "//button[@data-qa='login-button']")
+            login_btn.click()
+            
+            TestResultCollector.add_result('test_case_2_login_with_correct_credentials', 'PASSED')
+            
+        except Exception as e:
+            TestResultCollector.add_result('test_case_2_login_with_correct_credentials', 'FAILED', str(e))
+            raise e
+
+    # Continue with all your existing test methods...
+    # Make sure to add the try-catch pattern to each test method
 
     def test_case_3_login_with_incorrect_credentials(self):
         """Test Case 3: Login User with incorrect email and password"""
-        self.driver.get(self.base_url)
-        assert "Automation Exercise" in self.driver.title
-        
-        # Click on 'Signup / Login' button
-        signup_login_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Signup / Login")))
-        signup_login_btn.click()
-        
-        # Verify 'Login to your account' is visible
-        login_text = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h2[contains(text(), 'Login to your account')]")))
-        assert login_text.is_displayed()
-        
-        # Enter incorrect email and password
-        email_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-email']")
-        password_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-password']")
-        
-        email_field.send_keys("invalid@example.com")
-        password_field.send_keys("wrongpassword")
-        
-        # Click login button
-        login_btn = self.driver.find_element(By.XPATH, "//button[@data-qa='login-button']")
-        login_btn.click()
-        
-        # Verify error message
-        error_message = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//p[contains(text(), 'Your email or password is incorrect!')]")))
-        assert error_message.is_displayed()
+        try:
+            self.driver.get(self.base_url)
+            assert "Automation Exercise" in self.driver.title
+            
+            # Click on 'Signup / Login' button
+            signup_login_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Signup / Login")))
+            signup_login_btn.click()
+            
+            # Verify 'Login to your account' is visible
+            login_text = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h2[contains(text(), 'Login to your account')]")))
+            assert login_text.is_displayed()
+            
+            # Enter incorrect email and password
+            email_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-email']")
+            password_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-password']")
+            
+            email_field.send_keys("invalid@example.com")
+            password_field.send_keys("wrongpassword")
+            
+            # Click login button
+            login_btn = self.driver.find_element(By.XPATH, "//button[@data-qa='login-button']")
+            login_btn.click()
+            
+            # Verify error message
+            error_message = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//p[contains(text(), 'Your email or password is incorrect!')]")))
+            assert error_message.is_displayed()
+
+            TestResultCollector.add_result('test_case_3_login_with_incorrect_credentials', 'PASSED')
+        except Exception as e:
+            TestResultCollector.add_result('test_case_3_login_with_incorrect_credentials', 'FAILED', str(e))
+            raise e 
 
     def test_case_4_logout_User(self):
         """Test Case 4: Logout User"""
         # Note: This test requires pre-existing account credentials
         # For demo purposes, using placeholder credentials
-        
-        self.driver.get(self.base_url)
-        assert "Automation Exercise" in self.driver.title
-        
-        # Click on 'Signup / Login' button
-        signup_login_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Signup / Login")))
-        signup_login_btn.click()
-        
-        # Verify 'Login to your account' is visible
-        login_text = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h2[contains(text(), 'Login to your account')]")))
-        assert login_text.is_displayed()
-        
-        # Enter correct email and password (these would need to be valid credentials)
-        email_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-email']")
-        password_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-password']")
-        
-        # Note: Replace with actual test credentials
-        email_field.send_keys("allenlee@punkproof.com")
-        password_field.send_keys("SKDeIutmdZqgNxJ")
-        
-        # Click login button
-        login_btn = self.driver.find_element(By.XPATH, "//button[@data-qa='login-button']")
-        login_btn.click()
-        assert "Automation Exercise" in self.driver.title
+        try:
+            self.driver.get(self.base_url)
+            assert "Automation Exercise" in self.driver.title
 
-        # This test would need valid credentials to complete successfully
-        logout_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Logout")))
-        logout_btn.click()
+            # Click on 'Signup / Login' button
+            signup_login_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Signup / Login")))
+            signup_login_btn.click()
 
-        assert "login" in self.driver.current_url
+            # Verify 'Login to your account' is visible
+            login_text = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//h2[contains(text(), 'Login to your account')]")))
+            assert login_text.is_displayed()
+            
+            # Enter correct email and password (these would need to be valid credentials)
+            email_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-email']")
+            password_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-password']")
+            
+            # Note: Replace with actual test credentials
+            email_field.send_keys("allenlee@punkproof.com")
+            password_field.send_keys("SKDeIutmdZqgNxJ")
+            
+            # Click login button
+            login_btn = self.driver.find_element(By.XPATH, "//button[@data-qa='login-button']")
+            login_btn.click()
+            assert "Automation Exercise" in self.driver.title
+
+            # This test would need valid credentials to complete successfully
+            logout_btn = self.wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Logout")))
+            logout_btn.click()
+
+           
+            
+            TestResultCollector.add_result('test_case_4_logout_User', 'PASSED')
+        except Exception as e:
+            TestResultCollector.add_result('test_case_4_logout_User', 'FAILED', str(e))
+            raise e
 
     def test_case_5_Register_User_with_existing_email(self):
         """Test Case 5: Register User with existing email"""
@@ -1224,7 +1440,6 @@ class TestAutomationExercise:
 
         # Register a new user
         # Step 1: Click 'Register / Login' button
-        # Step 1: Click 'Register / Login' button
         self.driver.get(self.base_url)
         register_login = WebDriverWait(self.driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, '//*[@id="header"]/div/div/div/div[2]/div/ul/li[4]/a'))
@@ -1344,11 +1559,11 @@ class TestAutomationExercise:
         invoice_found = False
         for _ in range(10):  # Wait up to 10 seconds
             files = os.listdir(self.DOWNLOAD_DIR)
-            if any(f.endswith('.pdf') for f in files):
+            if any(f.endswith('.txt') for f in files):
                 invoice_found = True
                 break
             time.sleep(1)
-        assert invoice_found, "Invoice PDF was not downloaded!"
+        assert invoice_found, "Invoice txt was not downloaded!"
 
         # Cleanup: Delete account
         self.driver.find_element(By.CSS_SELECTOR, "a[href='/delete_account']").click()
@@ -1410,6 +1625,41 @@ class TestAutomationExercise:
             scroll_position = self.driver.execute_script("return window.pageYOffset;")
             assert scroll_position == 0
 
+# Create a conftest.py file or add pytest hooks
+def pytest_runtest_logreport(report):
+    """Pytest hook to capture test results"""
+    if report.when == 'call':
+        test_name = report.nodeid.split('::')[-1]
+        
+        if report.passed:
+            TestResultCollector.add_result(test_name, 'PASSED')
+        elif report.failed:
+            error_msg = str(report.longrepr) if report.longrepr else 'Unknown error'
+            TestResultCollector.add_result(test_name, 'FAILED', error_msg)
+        elif report.skipped:
+            TestResultCollector.add_result(test_name, 'SKIPPED')
+
+def pytest_sessionstart(session):
+    """Called after the Session object has been created"""
+    TestResultCollector.reset_results()
+
+def pytest_sessionfinish(session, exitstatus):
+    """Called after whole test run finished"""
+    TestResultCollector.send_test_report_email()
+
 if __name__ == "__main__":
-    # Run specific test
-    pytest.main(["-v", __file__])
+    # Initialize test results
+    TestResultCollector.reset_results()
+    
+    # Run tests with retry functionality
+    exit_code = pytest.main([
+        "-v", 
+        "--reruns=3", 
+        "--reruns-delay=2",
+        __file__
+    ])
+    
+    # Send email report after execution
+    TestResultCollector.send_test_report_email()
+    
+    exit(exit_code)

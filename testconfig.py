@@ -9,3 +9,9 @@ class TestConfig:
         "company": "Test Company",
         "address1": "123"
     }
+
+    # Login credentials
+    LOGIN_CREDENTIALS = {
+        "email": "john.doe@example.com",
+        "password": "password123"
+    }

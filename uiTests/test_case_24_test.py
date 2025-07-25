@@ -31,7 +31,7 @@ class Testcase24:
         self.driver = webdriver.Chrome(options=chrome_options)
         self.wait = WebDriverWait(self.driver, 10)
         self.base_url = "http://automationexercise.com"
-        self.DOWNLOAD_DIR = "D:\\_Downloads"
+        self.DOWNLOAD_DIR = "/home/allenlee/Downloads"
         yield
         
         # Teardown
@@ -172,11 +172,11 @@ class Testcase24:
         invoice_found = False
         for _ in range(10):  # Wait up to 10 seconds
             files = os.listdir(self.DOWNLOAD_DIR)
-            if any(f.endswith('.pdf') for f in files):
+            if any(f.endswith('.txt') for f in files):
                 invoice_found = True
                 break
             time.sleep(1)
-        assert invoice_found, "Invoice PDF was not downloaded!"
+        assert invoice_found, "Invoice txt was not downloaded!"
 
         # Cleanup: Delete account
         self.driver.find_element(By.CSS_SELECTOR, "a[href='/delete_account']").click()

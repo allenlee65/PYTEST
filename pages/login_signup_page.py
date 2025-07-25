@@ -2,6 +2,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from .base_page import BasePage
 from selenium.webdriver.support.ui import WebDriverWait
+from testconfig import TestConfig
 
 
 
@@ -18,9 +19,13 @@ class LoginSignupPage(BasePage):
         password_field = self.driver.find_element(By.XPATH, "//input[@data-qa='login-password']")
         
         # Note: Replace with actual test credentials
-        email_field.send_keys("allenlee@punkproof.com")
-        password_field.send_keys("SKDeIutmdZqgNxJ")
-        
+        email = TestConfig.LOGIN_CREDENTIALS["email"]
+        password = TestConfig.LOGIN_CREDENTIALS["password"]
+        email_field.clear()
+        password_field.clear()
+        email_field.send_keys(email)
+        password_field.send_keys(password)
+
         # Click login button
         login_btn = self.driver.find_element(By.XPATH, "//button[@data-qa='login-button']")
         login_btn.click()
