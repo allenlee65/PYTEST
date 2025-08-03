@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  pytest-runner:
+    build: .
+    environment:
+      - SENDER_EMAIL=${SENDER_EMAIL}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - PYTHONPATH=/app
+      - DISPLAY=:99
+    volumes:
+      - ./reports:/app/reports
+      - /dev/shm:/dev/shm
+    shm_size: 2gb
+    command: >
+      bash -c "
+        pytest uiTests/automation_exercise_test.py 
+        -v 
+        --reruns=3 
+        --reruns-delay=2 
+        --html=reports/report.html 
+        --self-contained-html 
+        --junit-xml=reports/junit.xml
+      "

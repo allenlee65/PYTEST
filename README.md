@@ -10,3 +10,23 @@ I have fixed above problems, but the code still needs to be improved for code re
 
 # To do:
 Refactor current scripts to Page Object Model pattern.
+
+
+
+
+# Build the Docker image
+docker build -t pytest-automation .
+
+# Run tests in Docker
+docker run --rm \
+  -e SENDER_EMAIL="your_email@gmail.com" \
+  -e EMAIL_PASSWORD="your_app_password" \
+  -v $(pwd)/reports:/app/reports \
+  --shm-size=2g \
+  pytest-automation \
+  pytest uiTests/automation_exercise_test.py -v --reruns=3 --reruns-delay=2 --html=reports/report.html --self-contained-html
+
+# Or use docker-compose
+export SENDER_EMAIL="your_email@gmail.com"
+export EMAIL_PASSWORD="your_app_password"
+docker-compose up --build
